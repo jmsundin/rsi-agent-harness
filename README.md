@@ -34,6 +34,8 @@ Standard library only. Python 3.11+.
 
 ```bash
 git clone https://github.com/jmsundin/rsi-agent-harness && cd rsi-agent-harness
+python3 -m venv .venv && source .venv/bin/activate
+pip install certifi pytest       # certifi: TLS roots on macOS python.org builds; pytest: optional
 cp .env.example .env            # add MODEL_API_KEY from dev.meta.ai
 
 # 1. Smoke everything offline with the deterministic mock (no API calls, ~5 s)

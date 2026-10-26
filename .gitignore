@@ -8,3 +8,4 @@ runs/
 *.egg-info/
 .pytest_cache/
 grader/data/noise.json
+.venv/
