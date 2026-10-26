@@ -73,7 +73,9 @@ def _env() -> dict[str, str]:
 def score_in_subprocess(worktree: Path, split: str, runs: int, seed: int, cap: float,
                         limit: int | None = None) -> dict:
     """Run eval.run from the MAIN checkout against the candidate's editable tree."""
-    out = worktree / f"report-{split}.json"
+    reports = config.RUNS_DIR / "reports"
+    reports.mkdir(parents=True, exist_ok=True)
+    out = reports / f"{worktree.name}-{split}-{seed}.json"
     cmd = [sys.executable, "-I", str(config.ROOT / "eval" / "run.py"), "--split", split,
            "--editable", str(worktree / "editable"), "--runs", str(runs), "--seed", str(seed),
            "--out", str(out)]

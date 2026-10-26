@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ratchet</title>
+<style>
+  :root { --bg:#0f1115; --panel:#171a21; --ink:#e8e9ec; --muted:#8b93a1; --line:#2a2f3a;
+          --ok:#3fb950; --bad:#f85149; --warn:#d29922; --accent:#58a6ff; --self:#bc8cff; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); display:flex; gap:24px; align-items:baseline }
+  header h1 { margin:0; font-size:18px; letter-spacing:.04em }
+  header .sub { color:var(--muted) }
+  main { display:grid; grid-template-columns: 1.1fr 1fr; gap:16px; padding:16px 24px }
+  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:14px }
+  h2 { margin:0 0 10px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em }
+  svg { width:100%; height:auto; display:block }
+  .row { display:flex; gap:10px; padding:8px 6px; border-bottom:1px solid var(--line); cursor:pointer; align-items:center }
+  .row:hover { background:#1d212b }
+  .row.sel { background:#1f2633 }
+  .pill { font-size:11px; padding:2px 7px; border-radius:10px; border:1px solid var(--line); white-space:nowrap }
+  .pill.ok { color:var(--ok); border-color:var(--ok) } .pill.bad { color:var(--bad); border-color:var(--bad) }
+  .pill.self { color:var(--self); border-color:var(--self) }
+  .hyp { flex:1; color:var(--ink) } .why { color:var(--muted); font-size:12px }
+  pre { white-space:pre-wrap; word-break:break-word; margin:0; font-size:12px; max-height:360px; overflow:auto }
+  .add { color:var(--ok) } .del { color:var(--bad) } .hunk { color:var(--accent) }
+  .kv { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; font-size:12px }
+  .kv b { color:var(--muted); font-weight:500 }
+  .span2 { grid-column: 1 / -1 }
+  .empty { color:var(--muted); padding:20px; text-align:center }
+  @media (max-width: 900px) { main { grid-template-columns:1fr } }
+</style>
+</head>
+<body>
+<header>
+  <h1>RATCHET</h1>
+  <span class="sub">a harness that only moves forward when the hidden split says so</span>
+  <span class="sub" id="receipt" style="margin-left:auto"></span>
+</header>
+<main>
+  <section class="span2">
+    <h2>Held-out score by generation (train in grey; rejected candidates hollow)</h2>
+    <svg id="chart" viewBox="0 0 900 220" aria-label="score per generation"></svg>
+  </section>
+  <section>
+    <h2>Candidates</h2>
+    <div id="list"></div>
+  </section>
+  <section>
+    <h2>Selected candidate</h2>
+    <div id="detail" class="empty">Click a candidate.</div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+let rows = [], sel = null;
+
+async function load() {
+  rows = await (await fetch('/api/results')).json();
+  const rc = await (await fetch('/api/receipt')).json();
+  if (rc.total_usd !== undefined) $('#receipt').textContent =
+    `${rc.models?.improver} improves · ${rc.models?.worker} works · $${rc.total_usd.toFixed(3)} · ${rc.calls} calls`;
+  drawChart(); drawList(); if (sel !== null) drawDetail();
+}
+
+function drawChart() {
+  const W=900,H=220,L=50,R=20,T=16,B=30;
+  const pts = rows.filter(r => r.train);
+  const svg = $('#chart');
+  if (!pts.length) { svg.innerHTML = `<text x="${W/2}" y="${H/2}" fill="#8b93a1" text-anchor="middle">no scored candidates yet</text>`; return; }
+  const x = i => L + (i/(Math.max(1,pts.length-1)))*(W-L-R);
+  const y = v => T + (1-v)*(H-T-B);
+  let s = '';
+  for (const g of [0,0.25,0.5,0.75,1]) s += `<line x1="${L}" x2="${W-R}" y1="${y(g)}" y2="${y(g)}" stroke="#2a2f3a"/><text x="${L-8}" y="${y(g)+4}" fill="#8b93a1" font-size="11" text-anchor="end">${g}</text>`;
+  // incumbent line: running best held-out (or train if held-out skipped)
+  let best = null, path = '';
+  pts.forEach((r,i) => {
+    const v = r.accepted ? (r.heldout?.composite ?? r.train.composite) : null;
+    if (v !== null) best = v;
+    if (best !== null) path += (path ? 'L' : 'M') + `${x(i)},${y(best)}`;
+  });
+  if (path) s += `<path d="${path}" fill="none" stroke="#58a6ff" stroke-width="2"/>`;
+  pts.forEach((r,i) => {
+    const tv = r.train.composite, hv = r.heldout?.composite;
+    s += `<circle cx="${x(i)}" cy="${y(tv)}" r="4" fill="${r.accepted?'#8b93a1':'none'}" stroke="#8b93a1"/>`;
+    if (hv !== undefined) s += `<circle cx="${x(i)}" cy="${y(hv)}" r="5" fill="${r.accepted?'#3fb950':'none'}" stroke="${r.accepted?'#3fb950':'#f85149'}" stroke-width="2"/>`;
+    s += `<text x="${x(i)}" y="${H-10}" fill="#8b93a1" font-size="11" text-anchor="middle">g${r.generation}</text>`;
+  });
+  svg.innerHTML = s;
+}
+
+function drawList() {
+  const el = $('#list');
+  if (!rows.length) { el.innerHTML = '<div class="empty">Run <code>python -m loop.run</code> to populate.</div>'; return; }
+  el.innerHTML = rows.slice().reverse().map(r => {
+    const cls = r.self_edit ? 'self' : (r.accepted ? 'ok' : 'bad');
+    const tag = r.self_edit ? 'SELF-EDIT' : (r.accepted ? 'ACCEPTED' : 'REJECTED');
+    const tr = r.train ? `train ${r.train.composite}` : '';
+    const ho = r.heldout ? ` · held-out ${r.heldout.composite}` : '';
+    return `<div class="row ${sel===r.candidate?'sel':''}" data-c="${r.candidate}">
+      <span class="pill ${cls}">${tag}</span>
+      <span class="hyp">g${r.generation} · ${r.component}<br><span class="why">${esc(r.hypothesis||'')}</span></span>
+      <span class="why">${tr}${ho}</span></div>`;
+  }).join('');
+  el.querySelectorAll('.row').forEach(d => d.onclick = () => { sel = +d.dataset.c; drawList(); drawDetail(); });
+}
+
+function drawDetail() {
+  const r = rows.find(x => x.candidate === sel); if (!r) return;
+  const checks = Object.entries(r.checks||{}).map(([k,v]) => `<span class="pill ${v?'ok':'bad'}">${k}</span>`).join(' ');
+  const diff = (r.diff||'').split('\n').map(l => {
+    const c = l.startsWith('+') && !l.startsWith('+++') ? 'add' : l.startsWith('-') && !l.startsWith('---') ? 'del' : l.startsWith('@@') ? 'hunk' : '';
+    return `<span class="${c}">${esc(l)}</span>`; }).join('\n');
+  $('#detail').className = '';
+  $('#detail').innerHTML = `
+    <div class="kv">
+      <b>candidate</b><span>${r.candidate} (${r.branch}) from ${r.parent}</span>
+      <b>hypothesis</b><span>${esc(r.hypothesis||'')}</span>
+      <b>falsifier</b><span>${esc(r.falsifier||'')}</span>
+      <b>decision</b><span>${esc(r.reason||'')}</span>
+      <b>checks</b><span>${checks}</span>
+      ${r.train ? `<b>train</b><span>composite ${r.train.composite} · acc ${r.train.label_acc} · planted ${r.train.planted_caught} · nei ${r.train.nei_recall} · $/claim ${r.train.cost_per_claim}</span>` : ''}
+      ${r.heldout ? `<b>held-out</b><span>composite ${r.heldout.composite} · acc ${r.heldout.label_acc} · planted ${r.heldout.planted_caught} · nei ${r.heldout.nei_recall}</span>` : ''}
+    </div>
+    <h2 style="margin-top:14px">diff</h2><pre>${diff || '(no diff)'}</pre>`;
+}
+const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+load(); setInterval(load, 4000);
+</script>
+</body>
+</html>
