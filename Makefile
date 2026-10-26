@@ -19,7 +19,8 @@ baseline:
 loop:
 	python3 -m loop.run --generations 30 --runs 2
 
-# Return main to the gen-0 scaffold and drop loop artifacts (use with care).
+# Drop loop artifacts (candidate branches, tags, worktrees, logs). Does NOT move main;
+# to return to gen-0 run: git reset --hard <gen-0 sha>
 reset:
 	git branch --list 'cand/*' | xargs -r git branch -D
 	git tag -l 'rejected/*' | xargs -r git tag -d
