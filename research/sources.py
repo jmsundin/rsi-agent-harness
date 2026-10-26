@@ -12,6 +12,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
+from core.net import urlopen
+
 
 @dataclass
 class Paper:
@@ -25,7 +27,7 @@ class Paper:
 
 def _get(url: str, timeout: int = 30) -> bytes:
     req = urllib.request.Request(url, headers={"User-Agent": "ratchet/0.1 (research harness)"})
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urlopen(req, timeout=timeout) as r:
         return r.read()
 
 

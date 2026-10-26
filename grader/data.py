@@ -18,6 +18,7 @@ import tarfile
 import urllib.request
 from pathlib import Path
 
+from core.net import urlopen
 from core.schema import Claim
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
@@ -33,7 +34,7 @@ SEEDS = {"train": 11, "heldout": 23, "ood": 37}
 def fetch_scifact() -> None:
     SCIFACT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"downloading {SCIFACT_URL} ...")
-    with urllib.request.urlopen(SCIFACT_URL, timeout=120) as r:
+    with urlopen(SCIFACT_URL, timeout=120) as r:
         buf = io.BytesIO(r.read())
     with tarfile.open(fileobj=buf, mode="r:gz") as tf:
         for m in tf.getmembers():
