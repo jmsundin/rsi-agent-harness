@@ -103,6 +103,13 @@ Splits: `train` (the improver sees failure traces from this), `heldout` (hidden;
 
 Workers run at fixed low reasoning effort; only the improver thinks hard. Gains therefore come from the harness, not from thinking longer at task time.
 
+## Troubleshooting
+
+- `CERTIFICATE_VERIFY_FAILED` on macOS: the python.org build ships without system root certs. Run
+  `/Applications/Python 3.x/Install Certificates.command`, or `pip install certifi` (the client picks it up automatically).
+- `401`: wrong `MODEL_API_KEY`. `404` on the model: update `RATCHET_MODEL_*` in `.env` to the IDs your Model API dashboard lists.
+- "editable/ has uncommitted changes": the loop branches candidates from a clean incumbent; commit first.
+
 ## Honest limits
 
 - The bundled `grader/data/sample_claims.jsonl` is **synthetic** (invented findings) so the loop runs offline. Real evaluation needs SciFact (`python -m grader.data fetch`).

@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import ssl
 import time
 import urllib.error
 import urllib.request
@@ -94,6 +95,19 @@ class Cache:
 
 
 CACHE = Cache(config.CACHE_DIR)
+
+
+def _ssl_context() -> ssl.SSLContext:
+    """Use certifi's CA bundle when installed (fixes python.org macOS builds that ship
+    without system roots); otherwise the platform default."""
+    try:
+        import certifi  # type: ignore
+        return ssl.create_default_context(cafile=certifi.where())
+    except ImportError:
+        return ssl.create_default_context()
+
+
+SSL_CONTEXT = _ssl_context()
 
 
 @dataclass
@@ -186,7 +200,7 @@ def chat(messages: list[dict], *, role: str = "worker", model: str | None = None
     last_err: Exception | None = None
     for attempt in range(4):
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            with urllib.request.urlopen(req, timeout=120, context=SSL_CONTEXT) as resp:
                 data = json.loads(resp.read())
             break
         except urllib.error.HTTPError as e:
