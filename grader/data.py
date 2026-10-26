@@ -40,7 +40,7 @@ def fetch_scifact() -> None:
         for m in tf.getmembers():
             if m.name.endswith((".jsonl",)) and m.isfile():
                 m.name = Path(m.name).name
-                tf.extract(m, SCIFACT_DIR)
+                tf.extract(m, SCIFACT_DIR, filter="data")
     print("extracted:", sorted(p.name for p in SCIFACT_DIR.glob("*.jsonl")))
 
 
