@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.env
+.cache/
+.worktrees/
+grader/data/scifact/
+runs/
+*.egg-info/
+.pytest_cache/

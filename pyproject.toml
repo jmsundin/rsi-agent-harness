@@ -1,0 +1,18 @@
+[project]
+name = "ratchet"
+version = "0.1.0"
+description = "Ratchet: a research-claim-checking harness that improves its own harness, keeping only edits that beat a hidden held-out split."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Jon Sundin" }]
+# The core loop, grader, gate and model client use only the standard library.
+# Optional extras are listed so you can swap in the SDK or a nicer UI later.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+sdk = ["openai>=1.50"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
