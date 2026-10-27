@@ -116,7 +116,7 @@ Workers run at fixed low reasoning effort; only the improver thinks hard. Gains 
 
 - The bundled `grader/data/sample_claims.jsonl` is **synthetic** (invented findings) so the loop runs offline. Real evaluation needs SciFact (`python -m grader.data fetch`).
 - The mock model is designed to be fixable by playbook rules; it demonstrates the loop, not the models.
-- Self-edits are accepted provisionally and should be reverted if acceptance rate falls over the next window; the revert is logged but manual in this version.
+- Self-edits are accepted provisionally and auto-reverted (`git revert`, history preserved) if the acceptance rate over the next `SELF_EDIT_EVERY` generations does not beat the previous window; the revert is logged in `CHANGELOG.md`. The pending verdict lives in the loop's in-memory `state`, so it is judged within the run that accepted the self-edit.
 - Harness evolution has known failure modes (overfitting, noise chasing, test-time-search confounds). The gate and the OOD slice exist to expose them, not to hide them. Report train and held-out side by side.
 
 ## License

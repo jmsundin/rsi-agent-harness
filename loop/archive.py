@@ -67,6 +67,17 @@ def accept(branch: str) -> str:
     return head()
 
 
+def revert_commit(sha: str, cwd: Path | None = None) -> str:
+    """Undo a commit already on main with a new inverse commit (history kept).
+
+    `git revert --no-edit` needs no editor, so the loop can run it unattended;
+    it requires a clean working tree and fails (RuntimeError) on conflict.
+    Returns the new HEAD.
+    """
+    git("revert", "--no-edit", sha, cwd=cwd)
+    return git("rev-parse", "--short", "HEAD", cwd=cwd)
+
+
 def tag_rejected(branch: str, cand_id: int) -> None:
     git("tag", "-f", f"rejected/{cand_id:03d}", branch, check=False)
 
@@ -90,6 +101,34 @@ def log(record: dict[str, Any]) -> None:
             f"({record.get('component')}): {record.get('hypothesis')} "
             f"| train {tr.get('composite', '-')} held-out {ho.get('composite', '-')} "
             f"| {record.get('reason')}\n")
+    with CHANGELOG.open("a") as f:
+        f.write(line)
+
+
+def log_revert(sha: str, baseline: float, window_rate: float | None, reverted: bool,
+               new_head: str = "") -> None:
+    """Record a provisional self-edit verdict in CHANGELOG.md and runs/results.jsonl."""
+    ensure_changelog()
+    config.RUNS_DIR.mkdir(exist_ok=True)
+    if reverted:
+        line = (f"- [reverted] self-edit {sha}: acceptance {baseline:.0%} -> {window_rate:.0%} "
+                f"over the next window; reverted in {new_head}\n")
+        record = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "self_edit": True,
+                  "self_edit_revert": True, "reverted_sha": sha, "accepted": False,
+                  "component": "improver_instructions",
+                  "hypothesis": "provisional self-edit under review",
+                  "reason": line.strip()[2:]}
+    else:
+        why = ("no window evidence" if window_rate is None
+               else f"acceptance {baseline:.0%} -> {window_rate:.0%}")
+        line = f"- [revert-failed] self-edit {sha}: {why}; provisional edit kept, see trace\n"
+        record = {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "self_edit": True,
+                  "self_edit_revert": False, "reverted_sha": sha, "accepted": True,
+                  "component": "improver_instructions",
+                  "hypothesis": "provisional self-edit under review",
+                  "reason": line.strip()[2:]}
+    with RESULTS.open("a") as f:
+        f.write(json.dumps(record, default=str) + "\n")
     with CHANGELOG.open("a") as f:
         f.write(line)
 

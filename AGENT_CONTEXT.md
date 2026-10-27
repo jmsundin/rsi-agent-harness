@@ -77,7 +77,7 @@ tests/                    unittest; must stay runnable with RATCHET_MOCK=1 and n
 Done: scaffold, grader, gate, editable harness, loop, dashboard, research board, 21 tests, SciFact fetched locally (868 claims, 60/40/20 splits). Real-model eval confirmed working (~$0.002 per claim).
 
 Known gaps, in priority order:
-1. **Provisional self-edits are not auto-reverted.** `loop/run.py` records `state["self_edit_baseline"]` and `state["self_edit_sha"]`; after the next `SELF_EDIT_EVERY` generations, compare the acceptance rate and `git revert` the self-edit commit if it did not improve. Log the revert in the changelog.
+1. ~~**Provisional self-edits are not auto-reverted.**~~ Done: `loop/run.py: maybe_revert_self_edit` judges the pending self-edit at `state["self_edit_due_gen"]` (= acceptance gen + `SELF_EDIT_EVERY`); if the window acceptance rate does not strictly beat `state["self_edit_baseline"]`, `loop/archive.py: revert_commit` reverts it on `main` and `log_revert` records it in the changelog. Pending state is in-memory, so the verdict lands in the same run. Covered by `tests/test_self_edit_revert.py`.
 2. **Pruning rule not implemented.** RRSI: components with no positive gain in the last 4 rounds should be reported to the improver as deletion targets. Needs a per-component gain history in `state` and a line in the improver prompt.
 3. **OOD split on real data is just more biomed.** SciFact is single-domain. A second claim source would make `ood` meaningful; low priority.
 4. **`research/board.py` has no mock for Frame/Synthesis**, so it returns empty offline. Fine for now.

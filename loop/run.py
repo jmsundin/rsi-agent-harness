@@ -47,6 +47,56 @@ def _incumbent_report(split: str, runs: int, seed: int, limit: int | None, cache
     return cache[key]
 
 
+def self_edit_should_revert(baseline: float, window: list[bool]) -> bool:
+    """A provisional self-edit survives only if the window strictly beats baseline."""
+    if not window:
+        return False
+    return (sum(window) / len(window)) <= baseline
+
+
+def maybe_revert_self_edit(gen: int, state: dict, trace: Trace) -> bool:
+    """Judge a pending provisional self-edit once its window has elapsed.
+
+    Returns True if the self-edit commit was reverted. The verdict is final
+    either way: the pending state is cleared so the next self-edit starts a
+    fresh window, and the outcome is logged in the changelog.
+    """
+    sha = state.get("self_edit_sha")
+    if not sha:
+        return False
+    due = state.get("self_edit_due_gen",
+                    state.get("self_edit_gen", gen) + improver.SELF_EDIT_EVERY)
+    if gen < due:
+        return False
+    baseline = state.get("self_edit_baseline", 0.0)
+    window = list(state.get("self_edit_window") or [])
+    window_rate = (sum(window) / len(window)) if window else None
+
+    def clear() -> None:
+        for key in ("self_edit_baseline", "self_edit_sha", "self_edit_gen",
+                    "self_edit_due_gen", "self_edit_window"):
+            state.pop(key, None)
+
+    if not self_edit_should_revert(baseline, window):
+        trace.event("self_edit_kept", generation=gen, sha=sha,
+                    baseline=baseline, window_rate=window_rate)
+        clear()
+        return False
+    try:
+        new_head = archive.revert_commit(sha)
+    except RuntimeError as e:
+        archive.git("revert", "--abort", check=False)
+        archive.log_revert(sha, baseline, window_rate, reverted=False)
+        trace.event("self_edit_revert_failed", generation=gen, sha=sha, error=str(e))
+        clear()
+        return False
+    archive.log_revert(sha, baseline, window_rate, reverted=True, new_head=new_head)
+    trace.event("self_edit_reverted", generation=gen, sha=sha, baseline=baseline,
+                window_rate=window_rate, new_head=new_head)
+    clear()
+    return True
+
+
 def ensure_noise(runs: int, limit: int | None, trace: Trace) -> float:
     if gate.NOISE_PATH.exists():
         return gate.load_delta()
@@ -63,6 +113,9 @@ def ensure_noise(runs: int, limit: int | None, trace: Trace) -> float:
 def generation(gen: int, runs: int, limit: int | None, use_heldout: bool, trace: Trace,
                cache: dict, state: dict) -> dict:
     llm.LEDGER.begin_scope(f"gen:{gen}", config.CAP_PER_GENERATION)
+    # Judge any provisional self-edit whose window has elapsed before this
+    # generation scores or proposes against the incumbent it produced.
+    maybe_revert_self_edit(gen, state, trace)
     delta = gate.load_delta()
     base_ref = archive.head()
     inc_train = _incumbent_report("train", runs, 0, limit, cache)
@@ -112,6 +165,9 @@ def generation(gen: int, runs: int, limit: int | None, use_heldout: bool, trace:
                                     checks={"leakage": True, "provisional": True})
             state["self_edit_baseline"] = acc_rate
             state["self_edit_sha"] = sha
+            state["self_edit_gen"] = gen
+            state["self_edit_due_gen"] = gen + improver.SELF_EDIT_EVERY
+            state["self_edit_window"] = []
         else:
             cand_train_d = sandbox.score_in_subprocess(wt, "train", runs, 0, config.CAP_PER_RUN, limit)
             cand_train = _report(cand_train_d)
@@ -146,6 +202,9 @@ def generation(gen: int, runs: int, limit: int | None, use_heldout: bool, trace:
     finally:
         archive.remove_worktree(wt)
 
+    # Feed this generation's verdict into a pending self-edit's window.
+    if not self_edit and state.get("self_edit_sha"):
+        state.setdefault("self_edit_window", []).append(bool(record["accepted"]))
     record["ledger"] = llm.LEDGER.snapshot()
     archive.log(record)
     trace.event("decision", generation=gen, candidate=cand_id, accepted=record["accepted"], reason=record["reason"])
