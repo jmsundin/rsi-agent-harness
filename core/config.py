@@ -53,8 +53,13 @@ else:
     _worker_default = "muse-spark-1.3"
 
 MODEL_IMPROVER = env("RATCHET_MODEL_IMPROVER", "muse-wonder-1.0")
-MODEL_WORKER = env("RATCHET_MODEL_WORKER", _worker_default)
 WORKER_PROVIDER = "baseten" if WORKER_API_BASE.startswith(BASETEN_API_BASE) else "meta"
+if WORKER_PROVIDER == "baseten":
+    # The hackathon Baseten key serves exactly one model; a Meta API ID left in .env
+    # (e.g. muse-spark-1.3) would 404 there, so the Baseten route always pins the model.
+    MODEL_WORKER = BASETEN_MODEL
+else:
+    MODEL_WORKER = env("RATCHET_MODEL_WORKER", _worker_default)
 
 # USD per million tokens (input, output). Standard-mode list prices, Oct 2026.
 # Spark Open on Baseten is billed against hackathon credits at the listed rate; the ledger
