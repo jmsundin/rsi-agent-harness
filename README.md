@@ -101,7 +101,8 @@ Splits: `train` (the improver sees failure traces from this), `heldout` (hidden;
 | --- | --- | --- |
 | Improver, Frame, Synthesis, leakage critic | `muse-wonder-1.0` | the few hard-reasoning calls per generation |
 | Judge, Sceptic | `muse-spark-1.3` | the hundreds of cheap scoring calls |
-| Optional inner scorer | Muse Spark Open on Baseten / Modal / Fireworks | set `RATCHET_WORKER_API_BASE`; near-free generations |
+| Judge, Sceptic (alternative) | `meta-models/muse-spark-open-1026` on Baseten | set `BASETEN_API_KEY`; workers switch to the open-weights model, improver stays on Wonder. Check with `python -m scripts.check_worker` |
+| Any other OpenAI-compatible worker | Modal / Fireworks / self-hosted | set `RATCHET_WORKER_API_BASE`, `RATCHET_WORKER_API_KEY`, `RATCHET_MODEL_WORKER` |
 
 Workers run at fixed low reasoning effort; only the improver thinks hard. Gains therefore come from the harness, not from thinking longer at task time.
 

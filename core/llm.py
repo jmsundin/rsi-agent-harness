@@ -182,15 +182,22 @@ def chat(messages: list[dict], *, role: str = "worker", model: str | None = None
     if effort:
         body["reasoning_effort"] = effort
 
-    req = urllib.request.Request(
-        f"{base}/chat/completions", data=json.dumps(body).encode(),
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        method="POST")
+    # Optional OpenAI-compatible fields. Some providers (Baseten's Model API among them)
+    # reject fields they do not implement with a 400; on that we retry once without them,
+    # so a stricter endpoint degrades to a plain chat completion instead of failing the run.
+    OPTIONAL_FIELDS = ("reasoning_effort", "seed", "response_format")
+
+    def _request(payload: dict[str, Any]) -> urllib.request.Request:
+        return urllib.request.Request(
+            f"{base}/chat/completions", data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            method="POST")
 
     last_err: Exception | None = None
+    stripped = False
     for attempt in range(4):
         try:
-            with urlopen(req, timeout=120) as resp:
+            with urlopen(_request(body), timeout=120) as resp:
                 data = json.loads(resp.read())
             break
         except urllib.error.HTTPError as e:
@@ -198,14 +205,32 @@ def chat(messages: list[dict], *, role: str = "worker", model: str | None = None
             if e.code in (429, 500, 502, 503, 504):
                 time.sleep(2 ** attempt)
                 continue
-            raise
+            if e.code in (400, 422) and not stripped and any(f in body for f in OPTIONAL_FIELDS):
+                for f in OPTIONAL_FIELDS:
+                    body.pop(f, None)
+                stripped = True
+                continue
+            detail = ""
+            try:
+                detail = e.read().decode()[:300]
+            except Exception:
+                pass
+            raise RuntimeError(f"{base} returned {e.code} for model {model}: {detail}") from e
         except (urllib.error.URLError, TimeoutError) as e:
             last_err = e
             time.sleep(2 ** attempt)
     else:
         raise RuntimeError(f"model call failed after retries: {last_err}")
 
-    text = data["choices"][0]["message"]["content"] or ""
+    msg = data["choices"][0]["message"]
+    text = msg.get("content") or ""
+    # Open reasoning models may put the final answer after inline <think>…</think> or return
+    # it only in `reasoning_content`; keep the answer, drop the thinking.
+    if "</think>" in text:
+        text = text.rsplit("</think>", 1)[1]
+    if not text.strip() and msg.get("reasoning_content"):
+        text = msg["reasoning_content"]
+    text = text.strip()
     usage = data.get("usage", {})
     tin = int(usage.get("prompt_tokens", est_in))
     tout = int(usage.get("completion_tokens", len(text) // 4))

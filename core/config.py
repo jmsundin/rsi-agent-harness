@@ -29,16 +29,40 @@ MOCK = env("RATCHET_MOCK", "0") == "1"
 
 API_BASE = env("MODEL_API_BASE", "https://api.meta.ai/v1").rstrip("/")
 API_KEY = env("MODEL_API_KEY", "")
-WORKER_API_BASE = (env("RATCHET_WORKER_API_BASE") or API_BASE).rstrip("/")
-WORKER_API_KEY = env("RATCHET_WORKER_API_KEY") or API_KEY
+
+# Worker (judge / sceptic) routing. Three ways, most specific wins:
+#   1. RATCHET_WORKER_API_BASE / RATCHET_WORKER_API_KEY / RATCHET_MODEL_WORKER set explicitly.
+#   2. BASETEN_API_KEY set: route workers to Muse Spark Open on Baseten's Model API.
+#      The hackathon key is scoped to exactly this model ID.
+#   3. Neither: workers use the Meta Model API alongside the improver.
+BASETEN_API_BASE = "https://inference.baseten.co/v1"
+BASETEN_MODEL = "meta-models/muse-spark-open-1026"
+BASETEN_API_KEY = env("BASETEN_API_KEY", "")
+
+if env("RATCHET_WORKER_API_BASE"):
+    WORKER_API_BASE = env("RATCHET_WORKER_API_BASE").rstrip("/")
+    WORKER_API_KEY = env("RATCHET_WORKER_API_KEY") or API_KEY
+    _worker_default = "muse-spark-1.3"
+elif BASETEN_API_KEY:
+    WORKER_API_BASE = BASETEN_API_BASE
+    WORKER_API_KEY = BASETEN_API_KEY
+    _worker_default = BASETEN_MODEL
+else:
+    WORKER_API_BASE = API_BASE
+    WORKER_API_KEY = API_KEY
+    _worker_default = "muse-spark-1.3"
 
 MODEL_IMPROVER = env("RATCHET_MODEL_IMPROVER", "muse-wonder-1.0")
-MODEL_WORKER = env("RATCHET_MODEL_WORKER", "muse-spark-1.3")
+MODEL_WORKER = env("RATCHET_MODEL_WORKER", _worker_default)
+WORKER_PROVIDER = "baseten" if WORKER_API_BASE.startswith(BASETEN_API_BASE) else "meta"
 
 # USD per million tokens (input, output). Standard-mode list prices, Oct 2026.
+# Spark Open on Baseten is billed against hackathon credits at the listed rate; the ledger
+# still charges it so caps and cost-per-claim stay comparable across providers.
 PRICES = {
     "muse-wonder-1.0": (4.00, 20.00),
     "muse-spark-1.3": (1.25, 4.25),
+    BASETEN_MODEL: (1.25, 4.25),
     "mock": (0.0, 0.0),
 }
 

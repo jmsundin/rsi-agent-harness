@@ -24,7 +24,8 @@ class Trace:
 
     def receipt(self, ledger_snapshot: dict[str, Any], **extra: Any) -> dict[str, Any]:
         r = {"run_id": self.run_id, "elapsed_s": round(time.time() - self.t0, 2),
-             "models": {"improver": config.MODEL_IMPROVER, "worker": config.MODEL_WORKER},
+             "models": {"improver": config.MODEL_IMPROVER, "worker": config.MODEL_WORKER,
+                        "worker_provider": config.WORKER_PROVIDER},
              **ledger_snapshot, **extra}
         (self.dir / "receipt.json").write_text(json.dumps(r, indent=2, default=str))
         return r

@@ -32,7 +32,7 @@ editable/                 the ONLY tree the improver may change (rungs 1-4)
   harness/run.py          rung 3: run_claims(claims, llm) -> list[Verdict]  (signature is FIXED)
   improver_instructions.md rung 4: the improver's own brief (text only)
 core/                     frozen
-  config.py               env, model routing, dollar caps
+  config.py               env, model routing (BASETEN_API_KEY -> Spark Open workers), dollar caps
   llm.py                  OpenAI-compatible chat via urllib; disk cache; cost ledger with hard caps
   net.py                  shared SSL context (certifi fallback)
   schema.py               Claim, Verdict, ScoreReport, Proposal, GateDecision (dataclasses)
@@ -60,7 +60,7 @@ tests/                    unittest; must stay runnable with RATCHET_MOCK=1 and n
 1. **Standard library only at runtime.** No new dependencies without asking. `certifi` and `pytest` are optional extras.
 2. **`run_claims(claims, llm)` keeps its signature.** `loop/sandbox.py: smoke` checks it; the eval and the research board depend on it.
 3. **Nothing under `grader/`, `core/`, `loop/`, `eval/` may be edited by the improver.** You may edit them as the developer, but do not add any code path that lets the improver reach them.
-4. **Every model call goes through `core.llm.chat`.** That is where caching and dollar caps live. No direct HTTP to the model endpoint elsewhere.
+4. **Every model call goes through `core.llm.chat`.** That is where caching, dollar caps, provider routing and the optional-field fallback (Baseten rejects fields it does not implement) live. No direct HTTP to the model endpoint elsewhere, and no `openai` SDK: the client is urllib so the runtime stays dependency-free.
 5. **Never lower δ to make an edit pass.** It is measured from repeated base-harness runs.
 6. **No test-item references in `editable/`.** The critic rejects `syn-N`, `sf-N`, `doc-N`, the words `planted`/`heldout`, and any 8-word window copied from a claim.
 7. **Tests must pass offline:** `RATCHET_MOCK=1 python -m unittest discover -s tests`.
